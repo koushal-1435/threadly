@@ -32,4 +32,15 @@ pipeline {
       }
     }
   }
+
+  stage('Deploy to Firebase') {
+  environment {
+    FIREBASE_TOKEN = credentials('firebase-token')
+  }
+  steps {
+    sh 'npm run build'
+    sh 'npx firebase deploy --token "$FIREBASE_TOKEN"'
+  }
+}
+
 }
