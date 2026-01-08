@@ -1,36 +1,78 @@
-import { Paper, TextField, Button, Box, Avatar, Divider } from "@mui/material";
-import { useState } from "react";
+import { Paper, TextField, Button, Box, Avatar, Divider, IconButton } from "@mui/material";
+import { useState, useRef } from "react";
 import { createPost } from "./post.service";
 import { useAuth } from "../../auth/useAuth";
-import { loginWithGoogle } from "../../firebase/auth";
+import { uploadImage } from "../../firebase/storage";
+import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
+import CloseIcon from "@mui/icons-material/Close";
+import "./CreatePost.css";
 
 export default function CreatePost() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [image, setImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
+  const fileInputRef = useRef(null);
+
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert("Image size should be less than 5MB");
+        return;
+      }
+      setImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
 
   const handlePost = async () => {
     if (!title.trim() || !content.trim()) return;
     if (!user) {
-      loginWithGoogle();
       return;
     }
 
     try {
       setLoading(true);
 
+      let imageURL = null;
+      if (image) {
+        imageURL = await uploadImage(image, user.uid);
+      }
+
       await createPost({
         title,
         content,
         authorId: user.uid,
         authorName: user.displayName || "Anonymous",
+        authorPhotoURL: user.photoURL || null,
+        imageURL,
       });
 
       setTitle("");
       setContent("");
+      setImage(null);
+      setImagePreview(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     } catch (err) {
       console.error("Failed to create post", err);
+      alert("Failed to create post. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -39,41 +81,20 @@ export default function CreatePost() {
   return (
     <Paper
       elevation={0}
-      sx={{
-        background: "rgba(30, 30, 40, 0.6)",
-        backdropFilter: "blur(20px)",
-        border: "1px solid rgba(255, 255, 255, 0.1)",
-        borderRadius: "16px",
-        mb: 2.5,
-        overflow: "hidden",
-        boxShadow: "0 4px 24px rgba(0, 0, 0, 0.2)",
-        transition: "all 0.3s ease",
-        "&:hover": {
-          borderColor: "rgba(99, 102, 241, 0.3)",
-          boxShadow: "0 8px 32px rgba(99, 102, 241, 0.15)",
-        },
-      }}
+      className="create-post-container"
     >
-      <Box sx={{ p: 2.5 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2 }}>
+      <Box className="create-post-content">
+        <Box className="avatar-section">
           {user ? (
             <Avatar
               src={user.photoURL}
-              sx={{
-                width: 40,
-                height: 40,
-                border: "2px solid #6366f1",
-                boxShadow: "0 4px 12px rgba(99, 102, 241, 0.3)",
-              }}
+              className="user-avatar"
+              sx={{ width: 40, height: 40 }}
             />
           ) : (
             <Avatar
-              sx={{
-                width: 40,
-                height: 40,
-                background: "linear-gradient(135deg, #6366f1 0%, #ec4899 100%)",
-                boxShadow: "0 4px 12px rgba(99, 102, 241, 0.3)",
-              }}
+              className="anonymous-avatar"
+              sx={{ width: 40, height: 40 }}
             >
               ?
             </Avatar>
@@ -86,12 +107,14 @@ export default function CreatePost() {
               onChange={(e) => setTitle(e.target.value)}
               sx={{
                 "& .MuiOutlinedInput-root": {
-                  background: "rgba(20, 20, 30, 0.6)",
-                  backdropFilter: "blur(10px)",
-                  border: "1px solid rgba(255, 255, 255, 0.1)",
-                  borderRadius: "12px",
-                  color: "#f1f5f9",
-                  transition: "all 0.2s ease",
+                  "&": {
+                    background: "rgba(20, 20, 30, 0.6)",
+                    backdropFilter: "blur(10px)",
+                    border: "1px solid rgba(255, 255, 255, 0.1)",
+                    borderRadius: "12px",
+                    color: "#f1f5f9",
+                    transition: "all 0.2s ease",
+                  },
                   "& fieldset": {
                     border: "none",
                   },
@@ -160,36 +183,57 @@ export default function CreatePost() {
           }}
         />
 
-        <Divider sx={{ borderColor: "rgba(255, 255, 255, 0.1)", mb: 2 }} />
+        {imagePreview && (
+          <Box className="image-preview-container">
+            <img
+              src={imagePreview}
+              alt="Preview"
+              className="image-preview"
+            />
+            <IconButton
+              onClick={handleRemoveImage}
+              className="remove-image-button"
+              sx={{
+                position: "absolute",
+                top: 8,
+                right: 8,
+                background: "rgba(0, 0, 0, 0.7)",
+                color: "white",
+                "&:hover": {
+                  background: "rgba(0, 0, 0, 0.9)",
+                },
+              }}
+            >
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        )}
 
-        <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+        <Divider className="divider" sx={{ borderColor: "rgba(255, 255, 255, 0.1)", mb: 2 }} />
+
+        <Box className="actions-row">
+          <input
+            type="file"
+            accept="image/*"
+            ref={fileInputRef}
+            onChange={handleImageSelect}
+            className="file-input"
+            id="image-upload"
+          />
+          <label htmlFor="image-upload">
+            <Button
+              component="span"
+              startIcon={<PhotoCameraIcon />}
+              className="upload-button"
+            >
+              {image ? "Change Photo" : "Add Photo"}
+            </Button>
+          </label>
           <Button
             variant="contained"
             onClick={handlePost}
             disabled={loading || !title.trim() || !content.trim()}
-            sx={{
-              background: loading || !title.trim() || !content.trim()
-                ? "rgba(99, 102, 241, 0.2)"
-                : "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
-              color: "#ffffff",
-              textTransform: "none",
-              fontWeight: 600,
-              px: 3,
-              py: 1,
-              borderRadius: "12px",
-              boxShadow: "0 4px 12px rgba(99, 102, 241, 0.4)",
-              transition: "all 0.2s ease",
-              "&:hover": {
-                background: "linear-gradient(135deg, #818cf8 0%, #a78bfa 100%)",
-                boxShadow: "0 6px 20px rgba(99, 102, 241, 0.5)",
-                transform: "translateY(-1px)",
-              },
-              "&:disabled": {
-                background: "rgba(99, 102, 241, 0.2)",
-                color: "#94a3b8",
-                boxShadow: "none",
-              },
-            }}
+            className="post-button"
           >
             {loading ? "Posting..." : "Post"}
           </Button>
@@ -198,4 +242,3 @@ export default function CreatePost() {
     </Paper>
   );
 }
-  

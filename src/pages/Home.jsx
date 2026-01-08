@@ -2,10 +2,13 @@ import { useEffect, useState } from "react";
 import AppShell from "../shared/AppShell";
 import PostList from "../features/posts/PostList";
 import CreatePost from "../features/posts/CreatePost";
+import LoginPrompt from "../features/posts/LoginPrompt";
 import { subscribeToPosts } from "../features/posts/post.service";
+import { useAuth } from "../auth/useAuth";
 
 export default function Home() {
   const [posts, setPosts] = useState([]);
+  const { user } = useAuth();
 
   useEffect(() => {
     const unsubscribe = subscribeToPosts(setPosts);
@@ -14,7 +17,7 @@ export default function Home() {
 
   return (
     <AppShell>
-      <CreatePost />
+      {user ? <CreatePost /> : <LoginPrompt />}
       <PostList posts={posts} />
     </AppShell>
   );

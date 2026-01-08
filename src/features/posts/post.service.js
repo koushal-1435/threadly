@@ -21,12 +21,16 @@ import {
     content,
     authorId,
     authorName,
+    authorPhotoURL,
+    imageURL,
   }) => {
     await addDoc(collection(db, "posts"), {
       title,
       content,
       authorId,
       authorName,
+      authorPhotoURL: authorPhotoURL || null,
+      imageURL: imageURL || null,
       upvotes: 0,
       downvotes: 0,
       score: 0,
