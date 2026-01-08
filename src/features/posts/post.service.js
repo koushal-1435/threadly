@@ -29,14 +29,14 @@ import {
       authorName,
       upvotes: 0,
       downvotes: 0,
-      score: 0, // 🔥 STORED SCORE (upvotes - downvotes)
+      score: 0, // ✅ REQUIRED FOR SORTING
       createdAt: serverTimestamp(),
     });
   };
   
   /**
-   * Subscribe to posts collection (real-time)
-   * Posts are sorted by score DESC, then by createdAt DESC
+   * Subscribe to posts (real-time)
+   * Sorted by score DESC, then createdAt DESC
    */
   export const subscribeToPosts = (setPosts) => {
     const postsRef = collection(db, "posts");
@@ -44,7 +44,7 @@ import {
     const q = query(
       postsRef,
       orderBy("score", "desc"),
-      orderBy("createdAt", "desc") // tie-breaker
+      orderBy("createdAt", "desc")
     );
   
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -53,7 +53,6 @@ import {
         ...doc.data(),
       }));
   
-      // ✅ No client-side sorting needed
       setPosts(posts);
     });
   
@@ -61,12 +60,12 @@ import {
   };
   
   /**
-   * Vote on a post (upvote / downvote / toggle)
+   * Handle upvote / downvote logic
    */
   export const voteOnPost = async ({
     postId,
     userId,
-    voteValue, // 1 (upvote) or -1 (downvote)
+    voteValue, // 1 (upvote) | -1 (downvote)
   }) => {
     const voteId = `${userId}_${postId}`;
     const voteRef = doc(db, "votes", voteId);
@@ -77,14 +76,18 @@ import {
       ? existingVoteSnap.data().vote
       : 0;
   
-    // 🔄 SAME VOTE → REMOVE (toggle off)
+    /**
+     * SAME VOTE → TOGGLE OFF
+     */
     if (existingVote === voteValue) {
       const updates = {};
   
       if (voteValue === 1) {
         updates.upvotes = increment(-1);
         updates.score = increment(-1);
-      } else if (voteValue === -1) {
+      }
+  
+      if (voteValue === -1) {
         updates.downvotes = increment(-1);
         updates.score = increment(1);
       }
@@ -100,46 +103,34 @@ import {
       return;
     }
   
-    // 🔁 SWITCHING VOTE OR FIRST TIME
-    let upvoteChange = 0;
-    let downvoteChange = 0;
-    let scoreChange = 0;
+    /**
+     * SWITCHING VOTE OR FIRST TIME
+     */
+    let updates = {};
   
-    // Remove existing vote
+    // Remove old vote
     if (existingVote === 1) {
-      upvoteChange -= 1;
-      scoreChange -= 1;
-    } else if (existingVote === -1) {
-      downvoteChange -= 1;
-      scoreChange += 1;
+      updates.upvotes = increment(-1);
+      updates.score = increment(-1);
+    }
+  
+    if (existingVote === -1) {
+      updates.downvotes = increment(-1);
+      updates.score = increment(1);
     }
   
     // Apply new vote
     if (voteValue === 1) {
-      upvoteChange += 1;
-      scoreChange += 1;
-    } else if (voteValue === -1) {
-      downvoteChange += 1;
-      scoreChange -= 1;
+      updates.upvotes = increment(1);
+      updates.score = increment(1);
     }
   
-    const updates = {};
-  
-    if (upvoteChange !== 0) {
-      updates.upvotes = increment(upvoteChange);
+    if (voteValue === -1) {
+      updates.downvotes = increment(1);
+      updates.score = increment(-1);
     }
   
-    if (downvoteChange !== 0) {
-      updates.downvotes = increment(downvoteChange);
-    }
-  
-    if (scoreChange !== 0) {
-      updates.score = increment(scoreChange);
-    }
-  
-    if (Object.keys(updates).length > 0) {
-      await updateDoc(postRef, updates);
-    }
+    await updateDoc(postRef, updates);
   
     await setDoc(voteRef, {
       userId,
