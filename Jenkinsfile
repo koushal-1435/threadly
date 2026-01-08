@@ -30,15 +30,15 @@ pipeline {
       }
     }
 
-    stage('Deploy to Firebase') {
-      steps {
-        sh '''
-          npx firebase deploy \
-            --only hosting \
-            --token "$FIREBASE_TOKEN"
-        '''
-      }
-    }
+stage('Deploy to Firebase') {
+  steps {
+    sh '''
+      ./node_modules/.bin/firebase deploy \
+        --only hosting \
+        --token "$FIREBASE_TOKEN"
+    '''
+  }
+}
   }
   post {
     success {
