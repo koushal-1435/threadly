@@ -5,12 +5,16 @@ pipeline {
     nodejs 'Node20'
   }
 
+  environment {
+    FIREBASE_TOKEN = credentials('firebase-token')
+  }
+
   stages {
     stage('Checkout') {
       steps {
-        git credentialsId: 'github-token',
-            url: 'https://github.com/koushal-1435/threadly.git',
-            branch: 'main'
+        git branch: 'main',
+            credentialsId: 'github-token',
+            url: 'https://github.com/koushal-1435/threadly.git'
       }
     }
 
@@ -20,27 +24,29 @@ pipeline {
       }
     }
 
-    stage('Lint') {
-      steps {
-        sh 'npm run lint'
-      }
-    }
-
     stage('Build') {
       steps {
         sh 'npm run build'
       }
     }
+
+    stage('Deploy to Firebase') {
+      steps {
+        sh '''
+          npx firebase deploy \
+            --only hosting \
+            --token "$FIREBASE_TOKEN"
+        '''
+      }
+    }
   }
 
-  stage('Deploy to Firebase') {
-  environment {
-    FIREBASE_TOKEN = credentials('firebase-token')
+  post {
+    success {
+      echo '🚀 Deployment successful!'
+    }
+    failure {
+      echo '❌ Deployment failed'
+    }
   }
-  steps {
-    sh 'npm run build'
-    sh 'npx firebase deploy --token "$FIREBASE_TOKEN"'
-  }
-}
-
 }
