@@ -29,7 +29,7 @@ import {
       authorName,
       upvotes: 0,
       downvotes: 0,
-      score: 0, // ✅ REQUIRED FOR SORTING
+      score: 0,
       createdAt: serverTimestamp(),
     });
   };
@@ -39,98 +39,89 @@ import {
    * Sorted by score DESC, then createdAt DESC
    */
   export const subscribeToPosts = (setPosts) => {
-    const postsRef = collection(db, "posts");
-  
     const q = query(
-      postsRef,
+      collection(db, "posts"),
       orderBy("score", "desc"),
       orderBy("createdAt", "desc")
     );
   
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const posts = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-  
-      setPosts(posts);
+    return onSnapshot(q, (snapshot) => {
+      setPosts(
+        snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+      );
     });
-  
-    return unsubscribe;
   };
   
   /**
-   * Handle upvote / downvote logic
+   * Handle upvote / downvote logic (FIXED)
    */
-  export const voteOnPost = async ({
-    postId,
-    userId,
-    voteValue, // 1 (upvote) | -1 (downvote)
-  }) => {
-    const voteId = `${userId}_${postId}`;
-    const voteRef = doc(db, "votes", voteId);
+  export const voteOnPost = async ({ postId, userId, voteValue }) => {
+    const voteRef = doc(db, "votes", `${userId}_${postId}`);
     const postRef = doc(db, "posts", postId);
   
-    const existingVoteSnap = await getDoc(voteRef);
-    const existingVote = existingVoteSnap.exists()
-      ? existingVoteSnap.data().vote
-      : 0;
+    const voteSnap = await getDoc(voteRef);
+    const previousVote = voteSnap.exists() ? voteSnap.data().vote : 0;
+  
+    let upvoteDelta = 0;
+    let downvoteDelta = 0;
+    let scoreDelta = 0;
   
     /**
-     * SAME VOTE → TOGGLE OFF
+     * TOGGLE OFF
      */
-    if (existingVote === voteValue) {
-      const updates = {};
-  
+    if (previousVote === voteValue) {
       if (voteValue === 1) {
-        updates.upvotes = increment(-1);
-        updates.score = increment(-1);
+        upvoteDelta = -1;
+        scoreDelta = -1;
+      } else {
+        downvoteDelta = -1;
+        scoreDelta = +1;
       }
   
-      if (voteValue === -1) {
-        updates.downvotes = increment(-1);
-        updates.score = increment(1);
-      }
-  
-      await updateDoc(postRef, updates);
-  
-      await setDoc(voteRef, {
-        userId,
-        postId,
-        vote: 0,
+      await updateDoc(postRef, {
+        upvotes: increment(upvoteDelta),
+        downvotes: increment(downvoteDelta),
+        score: increment(scoreDelta),
       });
   
+      await setDoc(voteRef, { userId, postId, vote: 0 });
       return;
     }
   
     /**
-     * SWITCHING VOTE OR FIRST TIME
+     * REMOVE OLD VOTE
      */
-    let updates = {};
-  
-    // Remove old vote
-    if (existingVote === 1) {
-      updates.upvotes = increment(-1);
-      updates.score = increment(-1);
+    if (previousVote === 1) {
+      upvoteDelta -= 1;
+      scoreDelta -= 1;
     }
   
-    if (existingVote === -1) {
-      updates.downvotes = increment(-1);
-      updates.score = increment(1);
+    if (previousVote === -1) {
+      downvoteDelta -= 1;
+      scoreDelta += 1;
     }
   
-    // Apply new vote
+    /**
+     * APPLY NEW VOTE
+     */
     if (voteValue === 1) {
-      updates.upvotes = increment(1);
-      updates.score = increment(1);
+      upvoteDelta += 1;
+      scoreDelta += 1;
     }
   
     if (voteValue === -1) {
-      updates.downvotes = increment(1);
-      updates.score = increment(-1);
+      downvoteDelta += 1;
+      scoreDelta -= 1;
     }
   
-    await updateDoc(postRef, updates);
+    await updateDoc(postRef, {
+      ...(upvoteDelta !== 0 && { upvotes: increment(upvoteDelta) }),
+      ...(downvoteDelta !== 0 && { downvotes: increment(downvoteDelta) }),
+      ...(scoreDelta !== 0 && { score: increment(scoreDelta) }),
+    });
   
     await setDoc(voteRef, {
       userId,
