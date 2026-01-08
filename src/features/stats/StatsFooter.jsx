@@ -20,7 +20,7 @@ export default function StatsFooter() {
         <Box className="stats-content">
           <Typography className="stats-number">{stats.users}</Typography>
           <Typography className="stats-label">
-            {stats.users === 1 ? "User" : "Users"} Logged In
+            {stats.users === "Threadly User"} Threadly User
           </Typography>
         </Box>
       </Box>
