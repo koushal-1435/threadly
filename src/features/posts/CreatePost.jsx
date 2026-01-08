@@ -80,7 +80,7 @@ export default function CreatePost() {
           )}
           <Box sx={{ flex: 1 }}>
             <TextField
-              placeholder="Create Posts now"
+              placeholder="Create Post"
               fullWidth
               value={title}
               onChange={(e) => setTitle(e.target.value)}
